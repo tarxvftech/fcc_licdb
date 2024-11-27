@@ -1,0 +1,20 @@
+CREATE TABLE PUBACC_AM (
+    record_type TEXT NOT NULL,
+    unique_system_identifier INTEGER NOT NULL,
+    uls_file_num TEXT,
+    ebf_number TEXT,
+    callsign TEXT,
+    operator_class TEXT,
+    group_code TEXT,
+    region_code INTEGER,
+    trustee_callsign TEXT,
+    trustee_indicator TEXT,
+    physician_certification TEXT,
+    ve_signature TEXT,
+    systematic_callsign_change TEXT,
+    vanity_callsign_change TEXT,
+    vanity_relationship TEXT,
+    previous_callsign TEXT,
+    previous_operator_class TEXT,
+    trustee_name TEXT
+)

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenLayers Map with Points</title>
+    <script src="https://cdn.jsdelivr.net/npm/ol@v10.2.1/dist/ol.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.2.1/ol.css">
+    <style>
+#map {
+  width: 100%;
+  height: 100vh;
+}
+    .ol-popup {
+      position: absolute;
+      background: white;
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+      min-width: 150px;
+    }
+    .layerbuttons {
+      position: absolute;
+      top: 1em;
+      right: 1em;
+      margin: 1em;
+    }
+    .layerbuttons button {
+      width: auto;
+    }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <script>
+      const osmLayer = new ol.layer.Tile({
+        source: new ol.source.OSM(),
+        visible: true 
+      });
+
+      const satelliteLayer = new ol.layer.Tile({
+        source: new ol.source.XYZ({
+          url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          attributions: 'Tiles © Esri'
+        }),
+        visible: false 
+      });
+
+
+      const map = new ol.Map({
+        target: 'map',
+        layers: [ osmLayer,satelliteLayer ],
+        view: new ol.View({
+          center: ol.proj.fromLonLat([-100.5, 40.5]),
+          zoom: 4
+        })
+      });
+      function switchLayer(layerToActivate) {
+        osmLayer.setVisible(layerToActivate === 'osm');
+        satelliteLayer.setVisible(layerToActivate === 'satellite');
+      }
+      // Add simple buttons to switch layers
+      const buttonContainer = document.createElement('div');
+      buttonContainer.className = 'ol-unselectable ol-control layerbuttons';
+      buttonContainer.innerHTML = `
+            <button onclick="switchLayer('osm')">OSM</button>
+            <button onclick="switchLayer('satellite')">Satellite</button>
+        `;
+      map.addControl(new ol.control.Control({ element: buttonContainer }));
+
+      // Load the JSON point data
+      fetch('points.json')
+        .then(response => response.json())
+        .then(data => {
+          const vectorSource = new ol.source.Vector({
+            //features: new ol.format.GeoJSON().readFeatures(data)
+            url: 'points.json',
+            format: new ol.format.GeoJSON({
+              dataProjection: 'EPSG:4326',  // GeoJSON projection
+              featureProjection: 'EPSG:3857' // Map's projection (Web Mercator)
+            })
+          });
+
+          // Define a style with a little red circle for each feature
+          // Define a function to create a style based on zoom level
+          function createStyle(feature, zoom) {
+            return new ol.style.Style({
+              image: new ol.style.Circle({
+                radius: 5,
+                fill: new ol.style.Fill({ color: 'red' }),
+                stroke: new ol.style.Stroke({
+                  color: 'black', 
+                  width: 1 
+                })
+              }),
+              text: zoom >= 8 ? new ol.style.Text({
+                font: '18px monospace', // Increase the font size here
+                text: feature.get('call_sign'),
+                offsetY: 0,
+                offsetX: 10,
+                textAlign: 'left',
+                fill: new ol.style.Fill({ color: '#000' })
+              }) : null
+            });
+          }
+
+          // Create a vector layer using the vector source and the style
+          const vectorLayer = new ol.layer.Vector({
+            source: vectorSource,
+            style: (feature) => createStyle(feature, map.getView().getZoom())
+          });
+
+          // Assuming you have an existing OpenLayers map object named 'map'
+          map.addLayer(vectorLayer);
+
+
+          // Create a select interaction
+          const select = new ol.interaction.Select();
+          map.addInteraction(select);
+
+          // Create an overlay for displaying info
+          const infoBox = document.createElement('div');
+          infoBox.className = 'ol-popup';
+          const infoOverlay = new ol.Overlay({
+            element: infoBox,
+            positioning: 'bottom-center',
+            stopEvent: false,
+            offset: [0, -15]
+          });
+          map.addOverlay(infoOverlay);
+
+          // Listen for the select event
+          select.on('select', (event) => {
+            const selectedFeatures = event.selected;
+            if (selectedFeatures.length > 0) {
+              const feature = selectedFeatures[0];
+              const coordinates = feature.getGeometry().getCoordinates();
+              const properties = feature.getProperties();
+
+              infoBox.innerHTML = `<strong>${properties.call_sign}</strong><br><a href=${properties.link}>${properties.id}</a>`;
+
+              infoOverlay.setPosition(coordinates);
+            } else {
+              infoOverlay.setPosition(undefined);
+            }
+          });
+          map.getView().on('change:resolution', () => {
+
+            vectorLayer.setStyle((feature) => createStyle(feature, map.getView().getZoom()));
+          });
+        })
+        .catch(error => console.error('Error loading JSON data:', error));
+    </script>
+  </body>
+</html>
