@@ -491,7 +491,7 @@ def main():
             # ";", [lic.call_sign]
               # )
         # lic['MC'] = mc
-    #features += add_locations(dbcon)
+    features += add_locations(dbcon)
     features += add_markets(dbcon)
     geojson = {
             "type": "FeatureCollection",

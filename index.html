@@ -81,45 +81,120 @@
               featureProjection: 'EPSG:3857' // Map's projection (Web Mercator)
             })
           });
-
-          // Define a style with a little red circle for each feature
-          // Define a function to create a style based on zoom level
-          function createStyle(feature, zoom) {
-            return new ol.style.Style({
+          const styles = {
+            'Point': new ol.style.Style({
               image: new ol.style.Circle({
                 radius: 5,
                 fill: new ol.style.Fill({ color: 'red' }),
                 stroke: new ol.style.Stroke({
-                  color: 'black', 
-                  width: 1 
+                  color: 'black',
+                  width: 1
                 })
               }),
-              text: zoom >= 8 ? new ol.style.Text({
-                font: '18px monospace', // Increase the font size here
+            }),
+            'LineString': new ol.style.Style({
+              stroke: new ol.style.Stroke({
+                color: 'green',
+                width: 1,
+              }),
+            }),
+            'MultiLineString': new ol.style.Style({
+              stroke: new ol.style.Stroke({
+                color: 'green',
+                width: 1,
+              }),
+            }),
+            'MultiPoint': new ol.style.Style({
+              image: new ol.style.Circle({
+                radius: 5,
+                fill: new ol.style.Fill({ color: 'red' }),
+                stroke: new ol.style.Stroke({
+                  color: 'black',
+                  width: 1
+                })
+              }),
+            }),
+            'MultiPolygon': new ol.style.Style({
+              stroke: new ol.style.Stroke({
+                color: 'yellow',
+                width: 1,
+              }),
+              fill: new ol.style.Fill({
+                color: 'rgba(255, 255, 0, 0.1)',
+              }),
+            }),
+            'Polygon': new ol.style.Style({
+              stroke: new ol.style.Stroke({
+                color: 'blue',
+                lineDash: [4],
+                width: 3,
+              }),
+              fill: new ol.style.Fill({
+                color: 'rgba(0, 0, 255, 0.1)',
+              }),
+            }),
+            'GeometryCollection': new ol.style.Style({
+              stroke: new ol.style.Stroke({
+                color: 'magenta',
+                width: 2,
+              }),
+              fill: new ol.style.Fill({
+                color: 'magenta',
+              }),
+              image: new ol.style.Circle({
+                radius: 10,
+                fill: null,
+                stroke: new ol.style.Stroke({
+                  color: 'magenta',
+                }),
+              }),
+            }),
+            'Circle': new ol.style.Style({
+              stroke: new ol.style.Stroke({
+                color: 'red',
+                width: 2,
+              }),
+              fill: new ol.style.Fill({
+                color: 'rgba(255,0,0,0.2)',
+              }),
+            }),
+          };
+
+          const styleFunction = function (feature, zoom) {
+            const geometryType = feature.getGeometry().getType();
+            const baseStyle = styles[geometryType];
+            if (zoom >= 8) {
+              const text = new Text({
+                font: '18px monospace',
                 text: feature.get('call_sign'),
                 offsetY: 0,
                 offsetX: 10,
                 textAlign: 'left',
-                fill: new ol.style.Fill({ color: '#000' })
-              }) : null
-            });
-          }
+                fill: new Fill({ color: '#000' }),
+              });
+              return new Style({
+                image: baseStyle.getImage(),
+                stroke: baseStyle.getStroke(),
+                fill: baseStyle.getFill(),
+                text: text,
+              });
+            }
+            return baseStyle;
+          };
 
-          // Create a vector layer using the vector source and the style
+          // Create a vector layer using the vector source and the style function
           const vectorLayer = new ol.layer.Vector({
             source: vectorSource,
-            style: (feature) => createStyle(feature, map.getView().getZoom())
+            style: (feature) => styleFunction(feature, map.getView().getZoom())
           });
 
-          // Assuming you have an existing OpenLayers map object named 'map'
+
           map.addLayer(vectorLayer);
 
 
-          // Create a select interaction
           const select = new ol.interaction.Select();
           map.addInteraction(select);
 
-          // Create an overlay for displaying info
           const infoBox = document.createElement('div');
           infoBox.className = 'ol-popup';
           const infoOverlay = new ol.Overlay({
@@ -130,7 +205,6 @@
           });
           map.addOverlay(infoOverlay);
 
-          // Listen for the select event
           select.on('select', (event) => {
             const selectedFeatures = event.selected;
             if (selectedFeatures.length > 0) {
