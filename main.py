@@ -4,6 +4,7 @@ import glob
 import json
 import random
 import sqlite3
+import argparse
 
 
 from misc import dattr
@@ -280,7 +281,7 @@ def import_one_table(dbcon, table, file):
                 leftoverline += line
                 continue
             if len(row) > numcols:
-                e = f"Error handling line {i}: {line}\n"
+                e = f"Error handling {file} around line {i}: {line}\n"
                 leftoverline = ""
                 print(e)
                 with open("errors.txt","a+") as fd:
@@ -364,6 +365,7 @@ def add_markets(dbcon):
         " and PUBACC_HD.license_status = 'A' "+\
         ";"
     features = {}
+    bad = ['L000050594','L000046424','L000042813','L000042813','L000042431','L000042430','L000040769','WRDH825','L000040763','L000040757','L000040752','L000040747','L000040745','L000040739']
     for p in lazy_query(dbcon, q):
         try:
             lat,long = get_lat_long(p,"partition_lat","partition_long")
@@ -373,24 +375,43 @@ def add_markets(dbcon):
         seq = p.coordinate_seq_id
         cs = p.call_sign
         key = (cs,area)
+        if cs in bad:
+            continue
         if key not in features:
             features[key] = {
                     "properties":{
+                        "type": "MC",
                         "call_sign":cs, 
                         "id":p.unique_system_identifier, 
                         "link": f"https://wireless2.fcc.gov/UlsApp/UlsSearch/license.jsp?licKey={p.unique_system_identifier}",
                         "area":area, 
-                    },
-                    "type":"Polygon",
-                    "coordinates":[
-                        [
-                            ]
-                        ]
+                        },
+                    "type": "Feature",
+                    "geometry": {
+                        "type":"Polygon",
+                        "coordinates":[ [ ] ]
+                        },
                     }
-        features[key]["coordinates"][0].append([seq,long,lat])
+        features[key]["geometry"]["coordinates"][0].append([seq,long,lat])
     for key in features.keys():
-        features[key]["coordinates"][0].sort(key=lambda x:x[0])
+        features[key]["geometry"]["coordinates"][0].sort(key=lambda x:x[0]) #sort based on sequence number
+        features[key]["geometry"]["coordinates"][0] = list(map(
+            lambda x:[x[1],x[2]],  #now get rid of the sequence number
+            features[key]["geometry"]["coordinates"][0]
+            ))
+        l = len(features[key]["geometry"]["coordinates"][0])
+        if l > 20000: #that's enough points for anybody
+            print(key,l)
+            del features[key]["geometry"]["coordinates"][0]
+    print(bad)
     return features.values() #.values() just so it can be directly added to geojson
+
+
+
+def sort_xy_clockwise(points):
+    pass
+def polygon_sanity_check(points):
+    pass
 
 def get_lat_long(o:dict, latkey:str, longkey:str):
     lat = o[f"{latkey}_degrees"] + o[f"{latkey}_minutes"]/60 + o[f"{latkey}_seconds"]/3600
@@ -401,6 +422,7 @@ def get_lat_long(o:dict, latkey:str, longkey:str):
         long *= -1
     return lat,long
         
+
 def add_locations(dbcon):
     lo_q = "select PUBACC_LO.* "+ \
         sqljoin("PUBACC_LO",["PUBACC_HD"],"call_sign")+\
@@ -420,6 +442,7 @@ def add_locations(dbcon):
             "coordinates": [long, lat] 
           },
           "properties": {
+            "type": "LO",
             "call_sign": f"{loc.call_sign}",
             "id": f"{loc.unique_system_identifier}",
             "link": f"https://wireless2.fcc.gov/UlsApp/UlsSearch/license.jsp?licKey={loc.unique_system_identifier}"
@@ -428,77 +451,57 @@ def add_locations(dbcon):
         features.append(o)
     return features
 
-def main():
-    mustcreatedb = not os.path.isfile("uls.db")
-    dbcon = sqlite3.connect('uls.db')
-    dbcon.row_factory = printableRow #each row returned will be of this class
-    if mustcreatedb:
-        create_all_db(dbcon)
-        services = ["l_amat","l_coast","l_gmrs","l_market"]
-        services = ["l_market"]
-        for svc in services:
-            print("Importing: ",svc)
-            import_service_weekly_dump(dbcon, svc)
-    
-    # main_licensees = query(dbcon, 
-          # "select PUBACC_HD.call_sign,PUBACC_HD.unique_system_identifier,* "+ \
-        # " from PUBACC_HD "+\
-        # " where PUBACC_HD.radio_service_code = 'PC' "+\
-        # " and PUBACC_HD.license_status = 'A' "+\
-        # ";"
-          # )
+def write_geojson(dbcon):
     features=[]
-    # for lic in main_licensees: 
-        # cs = lic.call_sign
-        # lic = dattr(lic)
-
-        # mf = query(dbcon, 
-              # "select * "+ \
-            # sqljoin("PUBACC_MF",[],"call_sign",join="left")+\
-            # " where PUBACC_MF.call_sign = ? "+\
-            # ";", [lic.call_sign]
-              # )
-        # lic['MF'] = mf
-
-        # locations = query(dbcon, 
-              # "select PUBACC_LO.* "+ \
-            # sqljoin("PUBACC_LO",[],"call_sign",join="left")+\
-            # " where PUBACC_LO.call_sign = ? "+\
-            # ";", [lic.call_sign]
-              # )
-        # lic['LO'] = locations
-
-        # mk = query(dbcon, 
-              # "select * "+ \
-            # sqljoin("PUBACC_MK",[],"call_sign",join="left")+\
-            # " where PUBACC_MK.call_sign = ? "+\
-            # ";", [lic.call_sign]
-              # )
-        # lic['MK'] = mk
-
-        # ll = query(dbcon, 
-              # "select * "+ \
-            # sqljoin("PUBACC_LL",[],"call_sign",join="left")+\
-            # " where PUBACC_LL.call_sign = ? "+\
-            # ";", [lic.call_sign]
-              # )
-        # lic['LL'] = ll
-
-        # mc = query(dbcon, 
-              # "select * "+ \
-            # sqljoin("PUBACC_MC",[],"call_sign",join="left")+\
-            # " where PUBACC_MC.call_sign = ? "+\
-            # ";", [lic.call_sign]
-              # )
-        # lic['MC'] = mc
-    features += add_locations(dbcon)
+    #LL, MK, MF
+    #convert all points to multipoints to group them together
+    #maybe geometry collections for each callsign?
     features += add_markets(dbcon)
+    features += add_locations(dbcon)
     geojson = {
             "type": "FeatureCollection",
             "features": features
             }
     with open("points.json","w") as fd:
         json.dump(geojson,fd)
+
+def main():
+    parser = argparse.ArgumentParser(description='Manage database and services.')
+    parser.add_argument('-g','--geojson', action='store_true', help='Write GeoJSON data')
+    parser.add_argument('--no-coords', action='store_true', help='Execute no-coords query')
+    parser.add_argument('-c','--create-db', action='store_true', help='Create the database if it does not exist')
+    parser.add_argument('-i', '--import-services', nargs='*', default=['all'],
+                        help='Specify services to import (e.g., -i l_amat l_market) or "all" for all services')
+    args = parser.parse_args()
+
+    mustcreatedb = args.create_db or not os.path.isfile("uls.db")
+    dbcon = sqlite3.connect('uls.db')
+    dbcon.row_factory = printableRow #each row returned will be of this class
+    if mustcreatedb:
+        create_all_db(dbcon)
+        all_services = ["l_amat", "l_coast", "l_gmrs", "l_market", "l_LMpriv", 
+                        "l_paging", "l_LMcomm", "l_LMbcast"]
+
+        if 'all' in args.import_services or not args.import_services:
+            services = all_services
+        else:
+            services = args.import_services
+        for svc in services:
+            print("Importing:", svc)
+            import_service_weekly_dump(dbcon, svc)
+    
+    if args.geojson:
+        write_geojson(dbcon)
+    if args.no_coords:
+        qs = ("select HD.call_sign, HD.unique_system_identifier "
+                        "from PUBACC_HD HD "
+                        "left join PUBACC_LO LO on HD.call_sign=LO.call_sign "
+                        "left join PUBACC_MC MC on HD.call_sign=MC.call_sign "
+                        "where LO.call_sign is null and MC.call_sign is null "
+                        "and HD.radio_service_code='PC' and HD.license_status='A';")
+        query(dbcon, qs)
+    # > 133
+
     #get active callsigns 
         #get frequencies (MF) (Not FR, but maybe check there too - nothing right now)
             #MK has block a, block b I think and that might be where the frequencies are coming from on web that aren't shown in MF?

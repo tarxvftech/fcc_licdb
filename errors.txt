@@ -2,3 +2,119 @@ Error handling line 297708: EN|4611491|||WRQZ473|L|L02562759|kacson jr, michael 
 
 Error handling line 362727: EN|4781334|||WRXT202|L|L02680306|Farrar, Sean|Sean||Farrar|||||425 Hurfville Crosskeys Rd|Blackwood|NJ|08012|8784|c/o HamRegistry.org (BAl|4)|000|0033932369|I||||||
 
+Error handling line 297708: EN|4611491|||WRQZ473|L|L02562759|kacson jr, michael g|michael|g|kacson|jr||||13409 cascadian way|EVERETT|WA|WA|98208||michael g kacson|000|0032446924|I||||||
+
+Error handling line 362727: EN|4781334|||WRXT202|L|L02680306|Farrar, Sean|Sean||Farrar|||||425 Hurfville Crosskeys Rd|Blackwood|NJ|08012|8784|c/o HamRegistry.org (BAl|4)|000|0033932369|I||||||
+
+Error handling line 297708: EN|4611491|||WRQZ473|L|L02562759|kacson jr, michael g|michael|g|kacson|jr||||13409 cascadian way|EVERETT|WA|WA|98208||michael g kacson|000|0032446924|I||||||
+
+Error handling line 362727: EN|4781334|||WRXT202|L|L02680306|Farrar, Sean|Sean||Farrar|||||425 Hurfville Crosskeys Rd|Blackwood|NJ|08012|8784|c/o HamRegistry.org (BAl|4)|000|0033932369|I||||||
+
+Error handling line 105733: SF|5020598|||WSEX984|P|12858716|2| receive RPC(RPC Directories | Federal Communications Commission (fcc.gov)) approval.   If approval is received, the applicant must submit an application to modify the STA that includes RPC approval.||
+
+Error handling line 759028: CP|3589260|||WQTX395||1|3141 Fairview Park Drive | Suite 525|Falls Church|VA|7032051600|||
+
+Error handling line 279: 
+
+
+
+
+
+
+
+
+
+
+    | KROHNE |
+
+    KROHNE AMERICA, INC.
+
+    7 Dearborn Road
+
+    Peabody, MA 01960
+
+    Tel: 508-535-6060
+
+    Tel: 1-800-FLOWiNG
+
+    Fax: 508-535-1 720
+
+    August23, 1996
+
+    Federal Communications Commission
+
+    
+
+    
+
+||
+CO|1147151||WPKC649||t made with Mr. Terry Fishel 
+
+Error handling line 280: 
+    in the attached letter dated October 8, 1992.
+
+    
+
+    An application for Mobile Radio Service Authorization has been made to Land 
+
+    Transportation Services under a separate cover.
+
+    
+
+    Please do not hes||
+CO|1147151||WPKC649||itate to contact the unders||
+
+Error handling line 344: CO|1147165||WPKE442||   
+
+                 |Commission is granting a waiver of Rule 90.137(b) to allow those users to license the
+
+    
+
+    stations as temporary stations, define their operating area in terms of geographical
+
+    coordinates and a radius about those||
+
+Error handling line 355: CO|1147170||WPKF955||SKETCHES/MAPS ARE ATTACHED.    
+
+
+
+
+
+
+
+
+
+
+
+                                                      | KROHNE       
+
+                                               KROHNE AMERICA, INC.
+
+                                               Jul||
+
+Error handling line 15729: CO|1235156||WPJK896||E1-USGS 7.5 Q   |   7/9/96--CHANGED OT NAD INDICATOR TO 27 PER TELCON WITH BILL ISHERWOOD. DLL [W]||
+
+Error handling line 55923: CO|1586838||WPCN268||orksheet
+
+"for additional technical details. 
+
+WPCN268 CURRENT STATION LICENSE AUTHORIZATION
+
+
+
+ Coordinates HAAT E.R.P. Contour Distance Relocation
+
+ (Meters) (Watts) (km) Distance (km)
+
+
+
+40 dBu | 22 dBu
+
+
+
+ 39-57-13/75-09-50 118.9 282 27  52.5 0.3 [WAV||
+
+Error handling line 707043: EN|3594003|||WQTZ322|L|L00406475|ADVENTIST HEALTH HANFORD|||||5595829000||RANDY.EMERZIAN@YAHOO.COM|440 N. Greenfield Ave. Suite H|HANFORD|CA|93230|1970|Director | Facilities|000|0011470499|C||||||
+
+Error handling line 714823: EN|3642489|||WQUV880|L|L01898150|PE | RMJE|||||2704075784|2704878029|kelsey@pe-rmje.com|747 BEECH GROVE SUGAR GROVE|TOMPKINSVILLE|KY|42167|2|KELSEY JOHNSON|000|0023990724|L||||||
+
