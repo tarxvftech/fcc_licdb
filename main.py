@@ -322,7 +322,20 @@ class printableRow(sqlite3.Row):
         return self[name]
     def __setattr__(self,name,value):
         self[name] = value
-       
+    
+def lazy_query(dbcon, q, args=None):
+    db = dbcon.cursor()
+    if args is None:
+        db.execute(q)
+    else:
+        db.execute(q,args)
+    while True:
+        row = db.fetchone()
+        if row == None:
+            break
+        yield row
+    db.close()
+
 def query(dbcon, q, args=None):
     db = dbcon.cursor()
     if args is None:
@@ -344,49 +357,62 @@ def sqljoin(main_table, other_tables, common_column,join="left"):
         sql += f" {join} JOIN {table} ON {main_table}.{common_column}={table}.{common_column} "
     return sql
 
-def main():
-    mustcreatedb = not os.path.isfile("uls.db")
-    dbcon = sqlite3.connect('uls.db')
-    dbcon.row_factory = printableRow #each row returned will be of this class
-    if mustcreatedb:
-        create_all_db(dbcon)
-        services = ["l_amat","l_coast","l_gmrs","l_market"]
-        services = ["l_market"]
-        for svc in services:
-            print("Importing: ",svc)
-            import_service_weekly_dump(dbcon, svc)
-    
-    main_licensees = query(dbcon, 
-          "select PUBACC_HD.call_sign,PUBACC_HD.unique_system_identifier,* "+ \
-        " from PUBACC_HD "+\
+def add_markets(dbcon):
+    q = "select PUBACC_MC.* "+ \
+        sqljoin("PUBACC_MC",["PUBACC_HD"],"call_sign")+\
         " where PUBACC_HD.radio_service_code = 'PC' "+\
         " and PUBACC_HD.license_status = 'A' "+\
         ";"
-          )
-        # " and PUBACC_HD.auction_id = 61 "+\
-    locations = query(dbcon, 
-          "select PUBACC_HD.call_sign,PUBACC_HD.unique_system_identifier,PUBACC_LO.* "+ \
-        sqljoin("PUBACC_LO",["PUBACC_HD","PUBACC_MF"],"call_sign",join="left")+\
-        " where PUBACC_HD.radio_service_code = 'PC' "+\
-        " and PUBACC_HD.license_status = 'A' "+\
-        ";"
-          )
-        # " and ( " +\
-        # " (PUBACC_MF.lower_frequency BETWEEN 219.0 and 220.0 "+\
-        # " or PUBACC_MF.upper_frequency BETWEEN 219.0 and 220.0) "+\
-        # " or (PUBACC_MF.lower_frequency <= 219 and PUBACC_MF.upper_frequency >= 220) "+\
-        # " ) "+\
-    features=[]
-    for loc in locations:
+    features = {}
+    for p in lazy_query(dbcon, q):
         try:
-            lat = loc.lat_degrees + loc.lat_minutes/60 + loc.lat_seconds/3600
-            long = loc.long_degrees + loc.long_minutes/60 + loc.long_seconds/3600
-        except TypeError as e:
+            lat,long = get_lat_long(p,"partition_lat","partition_long")
+        except TypeError as e: #doesn't have lat/long
             continue
-        if loc.lat_direction == "S": 
-            lat *= -1
-        if loc.long_direction == "W": 
-            long *= -1
+        area = p.partition_area_id
+        seq = p.coordinate_seq_id
+        cs = p.call_sign
+        key = (cs,area)
+        if key not in features:
+            features[key] = {
+                    "properties":{
+                        "call_sign":cs, 
+                        "id":p.unique_system_identifier, 
+                        "link": f"https://wireless2.fcc.gov/UlsApp/UlsSearch/license.jsp?licKey={p.unique_system_identifier}",
+                        "area":area, 
+                    },
+                    "type":"Polygon",
+                    "coordinates":[
+                        [
+                            ]
+                        ]
+                    }
+        features[key]["coordinates"][0].append([seq,long,lat])
+    for key in features.keys():
+        features[key]["coordinates"][0].sort(key=lambda x:x[0])
+    return features.values() #.values() just so it can be directly added to geojson
+
+def get_lat_long(o:dict, latkey:str, longkey:str):
+    lat = o[f"{latkey}_degrees"] + o[f"{latkey}_minutes"]/60 + o[f"{latkey}_seconds"]/3600
+    long = o[f"{longkey}_degrees"] + o[f"{longkey}_minutes"]/60 + o[f"{longkey}_seconds"]/3600
+    if o[f"{latkey}_direction"] == "S": 
+        lat *= -1
+    if o[f"{longkey}_direction"] == "W": 
+        long *= -1
+    return lat,long
+        
+def add_locations(dbcon):
+    lo_q = "select PUBACC_LO.* "+ \
+        sqljoin("PUBACC_LO",["PUBACC_HD"],"call_sign")+\
+        " where PUBACC_HD.radio_service_code = 'PC' "+\
+        " and PUBACC_HD.license_status = 'A' "+\
+        ";"
+    features = []
+    for loc in lazy_query(dbcon, lo_q):
+        try:
+            lat,long = get_lat_long(loc,"lat","long")
+        except TypeError as e: #doesn't have lat/long
+            continue
         o={
           "type": "Feature",
           "geometry": {
@@ -400,6 +426,73 @@ def main():
           }
         }
         features.append(o)
+    return features
+
+def main():
+    mustcreatedb = not os.path.isfile("uls.db")
+    dbcon = sqlite3.connect('uls.db')
+    dbcon.row_factory = printableRow #each row returned will be of this class
+    if mustcreatedb:
+        create_all_db(dbcon)
+        services = ["l_amat","l_coast","l_gmrs","l_market"]
+        services = ["l_market"]
+        for svc in services:
+            print("Importing: ",svc)
+            import_service_weekly_dump(dbcon, svc)
+    
+    # main_licensees = query(dbcon, 
+          # "select PUBACC_HD.call_sign,PUBACC_HD.unique_system_identifier,* "+ \
+        # " from PUBACC_HD "+\
+        # " where PUBACC_HD.radio_service_code = 'PC' "+\
+        # " and PUBACC_HD.license_status = 'A' "+\
+        # ";"
+          # )
+    features=[]
+    # for lic in main_licensees: 
+        # cs = lic.call_sign
+        # lic = dattr(lic)
+
+        # mf = query(dbcon, 
+              # "select * "+ \
+            # sqljoin("PUBACC_MF",[],"call_sign",join="left")+\
+            # " where PUBACC_MF.call_sign = ? "+\
+            # ";", [lic.call_sign]
+              # )
+        # lic['MF'] = mf
+
+        # locations = query(dbcon, 
+              # "select PUBACC_LO.* "+ \
+            # sqljoin("PUBACC_LO",[],"call_sign",join="left")+\
+            # " where PUBACC_LO.call_sign = ? "+\
+            # ";", [lic.call_sign]
+              # )
+        # lic['LO'] = locations
+
+        # mk = query(dbcon, 
+              # "select * "+ \
+            # sqljoin("PUBACC_MK",[],"call_sign",join="left")+\
+            # " where PUBACC_MK.call_sign = ? "+\
+            # ";", [lic.call_sign]
+              # )
+        # lic['MK'] = mk
+
+        # ll = query(dbcon, 
+              # "select * "+ \
+            # sqljoin("PUBACC_LL",[],"call_sign",join="left")+\
+            # " where PUBACC_LL.call_sign = ? "+\
+            # ";", [lic.call_sign]
+              # )
+        # lic['LL'] = ll
+
+        # mc = query(dbcon, 
+              # "select * "+ \
+            # sqljoin("PUBACC_MC",[],"call_sign",join="left")+\
+            # " where PUBACC_MC.call_sign = ? "+\
+            # ";", [lic.call_sign]
+              # )
+        # lic['MC'] = mc
+    #features += add_locations(dbcon)
+    features += add_markets(dbcon)
     geojson = {
             "type": "FeatureCollection",
             "features": features

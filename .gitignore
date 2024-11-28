@@ -1,1 +1,13 @@
+__pycache__/
+.*.sw*
 apikeys/
+env/
+dbz/*.zip
+dbz/l_*/
+dbz/a_*/
+dbz/*.txt
+dbz/*.pdf
+dbz/*.csv
+
+uls.db
+
