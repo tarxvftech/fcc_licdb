@@ -53,3 +53,7 @@ entries, and then merge in the other data that isn't in the FCC database,
 like ham radio repeaters, to try to make the radio services in the ether
 around you that much more legible.
 One would need to scale up and start using vector tiles, I assume.
+
+
+## Sources not obvious from source
+The `AMT_json.geojson` encodes the regions associated with the AMT spectrum auction, and was found via: https://www.fcc.gov/wireless/gis-wtb (scroll down! look for "AMT", not "AMTS")
