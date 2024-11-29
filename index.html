@@ -7,6 +7,12 @@
     <script src="https://cdn.jsdelivr.net/npm/ol@v10.2.1/dist/ol.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.2.1/ol.css">
     <style>
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
 #map {
   width: 100%;
   height: 100vh;
@@ -52,8 +58,8 @@
         target: 'map',
         layers: [ osmLayer,satelliteLayer ],
         view: new ol.View({
-          center: ol.proj.fromLonLat([-80, 40]),
-          zoom: 7
+          center: ol.proj.fromLonLat([-95, 38]),
+          zoom: 5.5
         })
       });
       function switchLayer(layerToActivate) {
@@ -68,15 +74,26 @@
             <button onclick="switchLayer('satellite')">Satellite</button>
         `;
       map.addControl(new ol.control.Control({ element: buttonContainer }));
+      let market_AMTS = {};
+      fetch('AMTS_by_market.json')
+        .then(response => response.json())
+        .then(by_market => {
+          market_AMTS = by_market;
+        });
+      let placeless_AMTS = {};
+      fetch('AMTS_unplaceable.json')
+        .then(response => response.json())
+        .then(by_market => {
+          placeless_AMTS = by_callsign;
+        });
+
 
       const vectorSource = new ol.source.Vector();
       const geojsonFormat = new ol.format.GeoJSON();
-      // Load the JSON point data
-      fetch('by_callsign.json')
+      fetch('AMTS_by_callsign.json')
         .then(response => response.json())
         .then(data => {
           for( let callsign in data ){
-            console.log(callsign);
             let fc = data[callsign];
             const features = geojsonFormat.readFeatures(fc, {
               dataProjection: 'EPSG:4326',  // GeoJSON
@@ -120,11 +137,12 @@
             }),
             'MultiPolygon': new ol.style.Style({
               stroke: new ol.style.Stroke({
-                color: 'yellow',
-                width: 1,
+                color: 'blue',
+                lineDash: [4],
+                width: 3,
               }),
               fill: new ol.style.Fill({
-                color: 'rgba(255, 255, 0, 0.1)',
+                color: 'rgba(0, 20, 255, 0.1)',
               }),
             }),
             'Polygon': new ol.style.Style({
@@ -233,24 +251,37 @@
 
           select.on('select', (event) => {
             const selectedFeatures = event.selected;
-            console.log(event, selectedFeatures);
             infoBox.innerHTML = "";
             infoOverlay.setPosition(undefined);
+            let first = true;
             for( let sf of selectedFeatures ){
               if( infoBox.innerHTML.length > 0 ){
                 infoBox.innerHTML+="<br><br>";
               }
-              const coordinates = sf.getGeometry().getCoordinates();
               const properties = sf.getProperties();
-              console.log(properties);
-              infoBox.innerHTML += `${properties.type}: <strong>${properties.call_sign}</strong><br><a target="_blank" href=${properties.link}>${properties.id}</a>`;
-              if( properties.type == "MC" ){
-                infoBox.innerHTML += `<br>Area ${properties.area}`;
-              }
-              if( coordinates.length == 2 ){
-                infoOverlay.setPosition(coordinates);
+              const e = sf.getGeometry().getExtent();
+              const c = [
+                (e[0]+e[2])/2, 
+                (e[1]+e[3])/2
+              ];
+              if( properties.TYPE == "AMT" ){
+                infoBox.innerHTML += `${properties.MARKET_DES}: <strong>${properties.MARKET_COD}</strong>`;
+                if( ["AMT008","AMT009"].includes(properties.MARKET_COD) ){
+                  c[0] -= 180*100000; //bandaid: hawaii and alaska stuff being way off due to wrap-around extents
+                }
+                for( let v of market_AMTS[properties.MARKET_COD] ){
+                  let link= `https://wireless2.fcc.gov/UlsApp/UlsSearch/license.jsp?licKey=${v.unique_system_identifier}`;
+                  infoBox.innerHTML += `<br><a target="_blank" href=${link}>${v.call_sign}</a>`;
+                }
               } else {
-                infoOverlay.setPosition(coordinates[0][0]);
+                infoBox.innerHTML += `${properties.type}: <strong>${properties.call_sign}</strong><br><a target="_blank" href=${properties.link}>${properties.id}</a>`;
+                if( properties.type == "MC" ){
+                  infoBox.innerHTML += `<br>Area ${properties.area}`;
+                }
+              }
+              if( first ){
+                infoOverlay.setPosition(c);
+                first = false;
               }
             }
             infoBox.innerHTML += `<br><button onclick="openalllinks()">Open All</button>`;
@@ -261,6 +292,15 @@
           });
         })
         .catch(error => console.error('Error loading JSON data:', error));
+      fetch('AMT_json.geojson')
+        .then(response => response.json())
+        .then(data => {
+          const features = geojsonFormat.readFeatures(data, {
+            dataProjection: 'EPSG:4326',  // GeoJSON
+            featureProjection: 'EPSG:3857', // Map
+          });
+          vectorSource.addFeatures(features);
+        });
       function openalllinks(){
         document.querySelectorAll('#infobox a').forEach((a)=>{
           a.click();

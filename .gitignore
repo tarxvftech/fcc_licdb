@@ -8,6 +8,7 @@ dbz/a_*/
 dbz/*.txt
 dbz/*.pdf
 dbz/*.csv
+*.json
 
 uls.db
 
