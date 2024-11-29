@@ -69,23 +69,27 @@
         `;
       map.addControl(new ol.control.Control({ element: buttonContainer }));
 
+      const vectorSource = new ol.source.Vector();
+      const geojsonFormat = new ol.format.GeoJSON();
       // Load the JSON point data
-      fetch('points.json')
+      fetch('by_callsign.json')
         .then(response => response.json())
         .then(data => {
-          const vectorSource = new ol.source.Vector({
-            //features: new ol.format.GeoJSON().readFeatures(data)
-            url: 'points.json',
-            format: new ol.format.GeoJSON({
-              dataProjection: 'EPSG:4326',  // GeoJSON projection
-              featureProjection: 'EPSG:3857' // Map's projection (Web Mercator)
-            })
-          });
+          for( let callsign in data ){
+            console.log(callsign);
+            let fc = data[callsign];
+            const features = geojsonFormat.readFeatures(fc, {
+              dataProjection: 'EPSG:4326',  // GeoJSON
+              featureProjection: 'EPSG:3857', // Map
+            });
+            vectorSource.addFeatures(features);
+          }
+
           const styles = {
             'Point': new ol.style.Style({
               image: new ol.style.Circle({
-                radius: 5,
-                fill: new ol.style.Fill({ color: 'red' }),
+                radius: 4,
+                fill: new ol.style.Fill({ color: 'black' }),
                 stroke: new ol.style.Stroke({
                   color: 'black',
                   width: 1
@@ -163,8 +167,19 @@
           const styleFunction = function (feature, zoom) {
             const geometryType = feature.getGeometry().getType();
             const baseStyle = styles[geometryType];
+            const p = feature.getProperties();
+            let imagefill = undefined;
+            let text = undefined;
+            const pcolors = {"LO":"#F00","PC":"#0F0"};
+            let custom = false;
+            if( geometryType == 'Point' ){
+              if( Object.keys(pcolors).includes(p.type) ){
+                imagefill = new ol.style.Fill({ color: pcolors[p.type] });
+                custom = true;
+              }
+            }
             if (zoom >= 10) {
-              const text = new ol.style.Text({
+              text = new ol.style.Text({
                 font: '18px monospace',
                 text: feature.get('call_sign'),
                 offsetY: 0,
@@ -172,14 +187,22 @@
                 textAlign: 'left',
                 fill: new ol.style.Fill({ color: '#000' }),
               });
-              return new ol.style.Style({
-                image: baseStyle.getImage(),
-                stroke: baseStyle.getStroke(),
-                fill: baseStyle.getFill(),
-                text: text,
-              });
+              custom = true;
             }
-            return baseStyle;
+            let style = new ol.style.Style({
+              image: baseStyle.getImage(),
+              stroke: baseStyle.getStroke(),
+              fill: baseStyle.getFill(),
+              text: text,
+            });
+            if( custom ){
+              if( imagefill ){
+                style.image_.fill_ = imagefill;
+              }
+              return style;
+            } else {
+              return baseStyle;
+            }
           };
 
           // Create a vector layer using the vector source and the style function
@@ -199,6 +222,7 @@
 
           const infoBox = document.createElement('div');
           infoBox.className = 'ol-popup';
+          infoBox.id = 'infobox';
           const infoOverlay = new ol.Overlay({
             element: infoBox,
             positioning: 'bottom-center',
@@ -209,23 +233,27 @@
 
           select.on('select', (event) => {
             const selectedFeatures = event.selected;
-            if (selectedFeatures.length > 0) {
-              if( selectedFeatures.length > 1 ){
-                console.log(selectedFeatures);
+            console.log(event, selectedFeatures);
+            infoBox.innerHTML = "";
+            infoOverlay.setPosition(undefined);
+            for( let sf of selectedFeatures ){
+              if( infoBox.innerHTML.length > 0 ){
+                infoBox.innerHTML+="<br><br>";
               }
-              const feature = selectedFeatures[0];
-              const coordinates = feature.getGeometry().getCoordinates();
-              const properties = feature.getProperties();
-
-              infoBox.innerHTML = `${properties.type}:<strong>${properties.call_sign}</strong><br><a href=${properties.link}>${properties.id}</a>`;
+              const coordinates = sf.getGeometry().getCoordinates();
+              const properties = sf.getProperties();
+              console.log(properties);
+              infoBox.innerHTML += `${properties.type}: <strong>${properties.call_sign}</strong><br><a target="_blank" href=${properties.link}>${properties.id}</a>`;
+              if( properties.type == "MC" ){
+                infoBox.innerHTML += `<br>Area ${properties.area}`;
+              }
               if( coordinates.length == 2 ){
                 infoOverlay.setPosition(coordinates);
               } else {
                 infoOverlay.setPosition(coordinates[0][0]);
               }
-            } else { //not selected, hide infobox
-              infoOverlay.setPosition(undefined);
             }
+            infoBox.innerHTML += `<br><button onclick="openalllinks()">Open All</button>`;
           });
           map.getView().on('change:resolution', () => {
 
@@ -233,6 +261,11 @@
           });
         })
         .catch(error => console.error('Error loading JSON data:', error));
+      function openalllinks(){
+        document.querySelectorAll('#infobox a').forEach((a)=>{
+          a.click();
+        });
+      }
     </script>
   </body>
 </html>

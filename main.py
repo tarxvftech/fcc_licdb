@@ -16,7 +16,19 @@ from misc import dattr
 #import uszipcode 
 
 
-
+where = dattr()
+where.pc219 = (" HD.radio_service_code = 'PC' "
+        " and HD.license_status = 'A' "
+        " and ( "
+               "(HD.auction_id in (57,61)) "
+        " OR ("
+                " (MF.lower_frequency BETWEEN 219.0 and 220.0 "
+                " or MF.upper_frequency BETWEEN 219.0 and 220.0) "
+                " or (MF.lower_frequency <= 219 and MF.upper_frequency >= 220) "
+            " )"
+        " )"
+               )
+        # ")"
 
 class FCCTable:
     pass
@@ -353,19 +365,21 @@ def query(dbcon, q, args=None):
     return res
 
 def sqljoin(main_table, other_tables, common_column,join="left"):
-    sql = f"FROM {main_table} "
+    s="PUBACC_"
+    mst = main_table[len(s):] if s in main_table else main_table
+    sql = f"FROM {main_table} {mst}"
     for table in other_tables:
-        sql += f" {join} JOIN {table} ON {main_table}.{common_column}={table}.{common_column} "
+        st = table[len(s):] if s in table else table
+        sql += f" {join} JOIN {table} {st} ON {mst}.{common_column}={st}.{common_column} "
     return sql
 
 def add_markets(dbcon):
-    q = "select PUBACC_MC.* "+ \
-        sqljoin("PUBACC_MC",["PUBACC_HD"],"call_sign")+\
-        " where PUBACC_HD.radio_service_code = 'PC' "+\
-        " and PUBACC_HD.license_status = 'A' "+\
+    q = "select MC.* "+ \
+        sqljoin("PUBACC_MC",["PUBACC_HD","PUBACC_MF"],"call_sign")+\
+        "where " +where.pc219 +\
         ";"
     features = {}
-    bad = ['L000050594','L000046424','L000042813','L000042813','L000042431','L000042430','L000040769','WRDH825','L000040763','L000040757','L000040752','L000040747','L000040745','L000040739']
+    bad = ['L000050594','L000046424','L000042813','L000042813','L000042431','L000042430','L000040769','WRDH825','L000040763','L000040757','L000040752','L000040747','L000040745','L000040739','L000051430']
     for p in lazy_query(dbcon, q):
         try:
             lat,long = get_lat_long(p,"partition_lat","partition_long")
@@ -378,6 +392,7 @@ def add_markets(dbcon):
         if cs in bad:
             continue
         if key not in features:
+            print(key)
             features[key] = {
                     "properties":{
                         "type": "MC",
@@ -404,14 +419,15 @@ def add_markets(dbcon):
             print(key,l)
             del features[key]["geometry"]["coordinates"][0]
     print(bad)
-    return features.values() #.values() just so it can be directly added to geojson
+    by_callsign = {}
+    for key in features.keys():
+        cs,areaid = key
+        if cs not in by_callsign:
+            by_callsign[cs] = {}
 
+        by_callsign[cs][areaid] = features[key]
+    return by_callsign
 
-
-def sort_xy_clockwise(points):
-    pass
-def polygon_sanity_check(points):
-    pass
 
 def get_lat_long(o:dict, latkey:str, longkey:str):
     lat = o[f"{latkey}_degrees"] + o[f"{latkey}_minutes"]/60 + o[f"{latkey}_seconds"]/3600
@@ -424,12 +440,12 @@ def get_lat_long(o:dict, latkey:str, longkey:str):
         
 
 def add_locations(dbcon):
-    lo_q = "select PUBACC_LO.* "+ \
-        sqljoin("PUBACC_LO",["PUBACC_HD"],"call_sign")+\
-        " where PUBACC_HD.radio_service_code = 'PC' "+\
-        " and PUBACC_HD.license_status = 'A' "+\
+    #TODO: find points with the same exact lat,long and join them together into one point and aggregate the details
+    lo_q = "select distinct LO.* "+ \
+        sqljoin("PUBACC_LO",["PUBACC_HD","PUBACC_MF"],"call_sign")+\
+        "where " +where.pc219+\
         ";"
-    features = []
+    features_cs = {}
     for loc in lazy_query(dbcon, lo_q):
         try:
             lat,long = get_lat_long(loc,"lat","long")
@@ -448,22 +464,69 @@ def add_locations(dbcon):
             "link": f"https://wireless2.fcc.gov/UlsApp/UlsSearch/license.jsp?licKey={loc.unique_system_identifier}"
           }
         }
-        features.append(o)
-    return features
+        if loc.call_sign not in features_cs:
+            features_cs[loc.call_sign]=[]
+        features_cs[loc.call_sign].append(o)
+    return features_cs
+
+def add_pointscomm(dbcon):
+    lo_q = "select PC.* "+ \
+        sqljoin("PUBACC_PC",["PUBACC_HD","PUBACC_MF"],"call_sign")+\
+        "where " +where.pc219+\
+        ";"
+    features_cs = {}
+    for loc in lazy_query(dbcon, lo_q):
+        try:
+            lat,long = get_lat_long(loc,"lat","long")
+        except TypeError as e: #doesn't have lat/long
+            continue
+        o={
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [long, lat] 
+          },
+          "properties": {
+            "type": "PC",
+            "call_sign": f"{loc.call_sign}",
+            "id": f"{loc.unique_system_identifier}",
+            "link": f"https://wireless2.fcc.gov/UlsApp/UlsSearch/license.jsp?licKey={loc.unique_system_identifier}"
+          }
+        }
+        if loc.call_sign not in features_cs:
+            features_cs[loc.call_sign]=[]
+        features_cs[loc.call_sign].append(o)
+    return features_cs
 
 def write_geojson(dbcon):
-    features=[]
     #LL, MK, MF
     #convert all points to multipoints to group them together
     #maybe geometry collections for each callsign?
-    features += add_markets(dbcon)
-    features += add_locations(dbcon)
-    geojson = {
-            "type": "FeatureCollection",
-            "features": features
-            }
-    with open("points.json","w") as fd:
-        json.dump(geojson,fd)
+    print("collecting locations")
+    lo = add_locations(dbcon)
+    print("collecting market coordinates")
+    mc = add_markets(dbcon)
+    print("collecting pointcomms")
+    pc = add_pointscomm(dbcon)
+    callsigns = set(list(mc.keys()) + list(lo.keys()) + list(pc.keys()))
+    collection = {}
+    print("assembling feature collections by callsign")
+    for cs in callsigns:
+        print(cs)
+        features=[]
+        features += lo.get(cs,[])
+        if cs in mc:
+            features += mc[cs].values()
+        features+=pc.get(cs,[])
+        cso = {
+                "type": "FeatureCollection",
+                "features": features
+                }
+        collection[cs] = cso
+    with open("by_callsign.json","w") as fd:
+        json.dump(collection,fd)
+    print("GEOJSON DONE")
+
 
 def main():
     parser = argparse.ArgumentParser(description='Manage database and services.')
@@ -493,14 +556,21 @@ def main():
     if args.geojson:
         write_geojson(dbcon)
     if args.no_coords:
-        qs = ("select HD.call_sign, HD.unique_system_identifier "
-                        "from PUBACC_HD HD "
-                        "left join PUBACC_LO LO on HD.call_sign=LO.call_sign "
-                        "left join PUBACC_MC MC on HD.call_sign=MC.call_sign "
-                        "where LO.call_sign is null and MC.call_sign is null "
-                        "and HD.radio_service_code='PC' and HD.license_status='A';")
+        qs = "select HD.call_sign, HD.unique_system_identifier "+\
+              sqljoin("PUBACC_HD",["PUBACC_MC","PUBACC_LO","PUBACC_MF"],"call_sign")+\
+                        "where LO.call_sign is null and MC.call_sign is null "+\
+                        "and " + where.pc219+\
+                        ";"
         query(dbcon, qs)
-    # > 133
+        # count(*) > 133
+    if args.no_coords and False:
+        qs = "select HD.call_sign, HD.unique_system_identifier "+\
+              sqljoin("PUBACC_HD",["PUBACC_HD","PUBACC_MF"],"call_sign")+\
+                        "where " + where.pc219+\
+                        ";"
+                        
+        query(dbcon, qs)
+        # > 133
 
     #get active callsigns 
         #get frequencies (MF) (Not FR, but maybe check there too - nothing right now)
