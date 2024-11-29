@@ -250,6 +250,25 @@ def create_all_db(dbcon):
         db.execute(statement)
         dbcon.commit()
     print("Done creating tables")
+
+    tables = ["HD","EN","MF","MK","LO","MC","PC","LL"]
+    columns = ["call_sign","unique_system_identifier"]
+    specific = [
+            ("HD","radio_service_code"),
+            ("HD","license_status"),
+            ("HD","auction_id"),
+            ]
+    for tab in tables:
+        for col in columns:
+            indexes = f"CREATE INDEX idx_{tab+col} ON PUBACC_{tab}( {col} );"
+            print(indexes)
+            db.execute(indexes)
+        dbcon.commit()
+    for tab,col in specific:
+        indexes = f"CREATE INDEX idx_{tab+col} ON PUBACC_{tab}( {col} );"
+        print(indexes)
+        db.execute(indexes)
+    dbcon.commit()
     db.close()
 
 class TableAlreadyExists(Exception):
@@ -533,19 +552,29 @@ def main():
     parser.add_argument('-g','--geojson', action='store_true', help='Write GeoJSON data')
     parser.add_argument('--no-coords', action='store_true', help='Execute no-coords query')
     parser.add_argument('-c','--create-db', action='store_true', help='Create the database if it does not exist')
-    parser.add_argument('-i', '--import-services', nargs='*', default=['all'],
+    parser.add_argument('-i', '--import-services', nargs='*', default=None,
                         help='Specify services to import (e.g., -i l_amat l_market) or "all" for all services')
     args = parser.parse_args()
 
     mustcreatedb = args.create_db or not os.path.isfile("uls.db")
     dbcon = sqlite3.connect('uls.db')
+    #https://phiresky.github.io/blog/2020/sqlite-performance-tuning/
+    setup = """
+    pragma journal_mode = WAL;
+    pragma synchronous = normal;
+    pragma temp_store = memory;
+    pragma mmap_size = 30000000000;
+    """
+    for line in setup.split("\n"):
+        dbcon.execute(line.strip())
     dbcon.row_factory = printableRow #each row returned will be of this class
     if mustcreatedb:
         create_all_db(dbcon)
+    if mustcreatedb or args.import_services:
         all_services = ["l_amat", "l_coast", "l_gmrs", "l_market", "l_LMpriv", 
                         "l_paging", "l_LMcomm", "l_LMbcast"]
 
-        if 'all' in args.import_services or not args.import_services:
+        if 'all' in args.import_services:
             services = all_services
         else:
             services = args.import_services
